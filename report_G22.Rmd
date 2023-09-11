@@ -1,0 +1,127 @@
+---
+title: "Statistical Learning - Final Project Report"
+author: "Alvetreti - Corrias - Dicunta - Di Nino"
+date: "2023-09-14"
+header-includes:
+  - \usepackage{fancyhdr}
+  - \usepackage{makeidx}
+  - \makeindex
+  - \usepackage{lastpage}
+  - \usepackage{bbm}
+  - \usepackage{mdframed}
+  - \usepackage{mathtools}
+  - \usepackage{lmodern}
+  - \usepackage{amsmath}
+  - \pagestyle{fancy}
+  - \fancyhead[RO,RE]{\thepage}
+  - \fancyhead[LO,LE]{Statistical Learning - Notes from the course}
+  - \usepackage{amsmath}
+  - \DeclareMathOperator*{\argmax}{arg\,max}
+  - \DeclareMathOperator*{\argmin}{arg\,min}
+output: 
+  rmdformats::readthedown:
+    theme: cerulean
+    highlight: espresso
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## TherMike - hearing hot loud
+
+## Data collection and experimental design
+
+## Feature extraction and physical phenomenon
+
+## The statistical framework and some math-behind 
+
+Our problem is clearly a regression one: we have to predict water temperature (our response variable) from the sound it makes when poured. The real complexity in this problem is to deal with the covariates. The background for this model is functional data analysis: in every of our attempts we had to deal with features that are clearly time-dependent or frequency-dependent, or can be considered as discrete sampling from continuos and smooth functions. The main reference we adopted is *Introduction to functional data analysis*, an introductive survey in this field by Piotr Kokoszka and Matthew Reimherr. In particular we focused on chapter four, where scalar-response-on-functional-variable linear regression is described.
+Since an assumption for a linear underlying model in such a setting could have been a weak hypotesis, we decided to go a little further and try to inject non-linearity in our model. We had to choose between two main approaches:
+
++ the *continuously additive model* where the underlying generating model is 
+\begin{equation}
+Y_i = \alpha + \int f(X_i(t),t)dt + \epsilon_i
+\end{equation}
+
+and the functional form $f$ is estimated through a splines expansion;
+
++ the extension to the functional framework of well known *nonparametric models*. 
+
+We decided to go for the second option since it was interesting to get deeper in the field of nonparametric statistic and to study the assumptions we have to do to generalize these approaches in a functional settings.
+
+The two models we mainly worked on are two well-known nonparametric estimators of the response function $m(x)$ being $Y_i = m(x_i) + \epsilon_i$ and $m(x) = \mathbb{E}[Y|X=x]$:
+
+1) The Nadaraya-Watson kernel estimator;
+2) The k-Nearest-Neighbours estimator.
+
+Both of this models are based on a concept of distance that requires few adjustments to be used in a functional framework. We are going to consider for now a single functional covariate to define a general approach in approximating distances between functions: the further generalization of this for vectors of functional covariates meets some other issues. 
+
+Being in a functional space, let's assume $x(t),y(t) \in L^2([0,1])$ and consider a complete orthonormal basis $\mathcal{H} = \{e_j\}_{j=1}^{\infty}$. Under this assumptions Parseval's identity holds.
+\begin{equation}
+||x(t)||_{L^2}^2 = \sum_{j=1}^{\infty} |\langle x(t),e_j(t) \rangle|^2
+\end{equation}
+
+This means that for a distance between function we have the following:
+\begin{equation}
+||x(t)-y(t)||_{L^2}^2 = \sum_{j=1}^{\infty} |\langle x(t)-y(t),e_j(t) \rangle|^2
+\end{equation}
+
+Since the inner product is a bilinear form we have that $\langle x(t)-y(t),e_j(t) \rangle = \langle x(t),e_j(t) \rangle -\langle y(t),e_j(t) \rangle$. This means that we can express the $L^2$-distance between functions as the euclidean distance between the vectors of the projections of the functions on the orthonormal basis:
+
+\begin{gathered}
+||x(t)-y(t)||_{L^2}^2 = \sum_{j=1}^{\infty} |\langle x(t)-y(t),e_j(t) \rangle|^2 = \nonumber \\
+\sum_{j=1}^{\infty} |\langle x(t),e_j(t) \rangle -\langle y(t),e_j(t) \rangle|^2 =   \nonumber \\
+||\underline{\beta}_x^{\infty}-\underline{\beta}_y^{\infty}||_2^2
+\end{gathered}
+
+So in the end we can approximate the distance between the two functions through a basis expansions on a certain number $G$ of generators:
+
+\begin{equation}
+||x(t)-y(t)||_{L^2}^2 \approx ||\hat{\beta}_x-\hat{\beta}_y||_2^2
+\end{equation}
+
+where $\hat{\beta}$ is the vector of the empirical Generalized Fouerier Coefficients gathered from a finite basis expansion on an orthonormal basis: in our case we'll go for a cosine basis. This approach requires a basic remapping of the covariates on the domain $[0,1]$.
+
+**Nadaraya-Watson kernel estimator**
+
+The Nadarayan-Watson kernel estimator takes the following form:
+
+\begin{equation}
+m(X(t)) = \frac{\sum_{i=1}^N Y_iK(h^{-1}d(X_i(t),X(t)))}{\sum_{j=1}^N K(h^{-1}d(X_j(t),X(t)))}
+\end{equation}
+
+Given a new signal $X(t)$ the model predicts the response averaging through the whole dataset building a system of weights based on the distance $d(X_i,X)$, a smoothing kernel $K$ that in our case is the gaussian one and a parameter to be tuned through cross-validation $h$: the size of our datasets allows for a leave one out cross validation routine. 
+
+In a classic setting of a single continuously defined covariate $X$ and a continuosly defined response $Y$ we have the following:
+
+\begin{equation}
+\mathbb{E}[Y|X=x] = \int yf(y|x)dy = \int \frac{yf(x,y)}{f(x)}dy
+\end{equation}
+
+Through a kernel density estimation with a kernel $K_h$ on both the joint distribution and the marginal on $x$ we have the following estimate for the regression function:
+
+\begin{gather}
+\hat{\mathbb{E}}[Y|X=x] = \int \frac{y\hat{f}(x,y)}{\hat{f}(x)}dy = \\ \nonumber
+\int \frac{y\frac{1}{N}\sum_{j=1}^{N} K_h(d(x,x_j))K_h(d(y,y_j))}{\frac{1}{N}\sum_{j=1}^{N} K_h(d(x,x_j))}dy = \\ \nonumber
+\frac{\sum_{j=1}^{N} K_h(d(x,x_j))\int y_jK_h(d(y,y_j))dy}{\sum_{j=1}^{N} K_h(d(x,x_j))} = \\ \nonumber
+\frac{\sum_{j=1}^{N} K_h(d(x,x_j))y_j}{\sum_{j=1}^{N} K_h(d(x,x_j))}
+\end{gather}
+
+So our estimator has the same structure and derivation as the one above expect for the definition of distance involved.
+
+**k-Nearest-Neighbours regression**
+
+In this case the estimate for a regression function is just a local average of the response of the $K$ nearest data points: again in our case it is as the same as the classic formulation, except for the definition of distance.
+
+\begin{equation}
+\hat{m}(x) = \frac{1}{K} \sum_{k \in K_{nn}} Y_k
+\end{equation}
+
+Again the parameter $K$ can be validate through a LOOCV routine. 
+
+## Implementation - the failures
+
+## Implementation - the successes
+
+## Result and comments 
