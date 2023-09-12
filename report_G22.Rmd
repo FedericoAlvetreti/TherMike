@@ -22,6 +22,9 @@ output:
   rmdformats::readthedown:
     theme: cerulean
     highlight: espresso
+editor_options: 
+  markdown: 
+    wrap: sentence
 ---
 
 ```{r setup, include=FALSE}
@@ -35,99 +38,172 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Feature extraction and physical phenomenon
 
-# The statistical framework and some math-behind 
+In order to understand *a priori* how the algorithm will output the predicted temperature, we thought a physical explanation of the phenomenon could be useful.
+In particular, since we start from the power spectrum, the vibrational phenomena are particularly significant.
+Let's start from a premise: it makes sense to think you can determine the water temperature by the sound it makes while poured.
+This is true both for empirical evidence (even human ear could detect a difference) both for the change in viscosity and density due to a variation of the temperature.
+We see that both of them decrease as the temperature increases.
 
-Our problem is clearly a regression one: we have to predict water temperature (our response variable) from the sound it makes when poured. The real complexity in this problem is to deal with the covariates. The background for this model is functional data analysis: in every of our attempts we had to deal with features that are clearly time-dependent or frequency-dependent, or can be considered as discrete sampling from continuos and smooth functions. The main reference we adopted is *Introduction to functional data analysis*, an introductive survey in this field by Piotr Kokoszka and Matthew Reimherr. In particular we focused on chapter four, where scalar-response-on-functional-variable linear regression is described.
-Since an assumption for a linear underlying model in such a setting could have been a weak hypotesis, we decided to go a little further and try to inject non-linearity in our model. We had to choose between two main approaches:
 
-+ the *continuously additive model* where the underlying generating model is 
-\begin{equation}
-Y_i = \alpha + \int f(X_i(t),t)dt + \epsilon_i
-\end{equation}
+```{r,echo=F}
+knitr::include_graphics("C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\density_viscosity.png")
+```
+
+
+The intuition is to analyse the sound made by pouring water in a way that the algorithm can classify from it.
+The approach is to study the intensities of different **frequencies** making up the sound.
+Notice that these frequencies are the acoustic emissions formed by air bubbles when the water surface causes air to be trapped in it.
+After formation, these bubbles emit a *sinusoidal sound* which decays as energy is dissipated.
+
+Hence, we could think that the harmonic content is different for cold and hot water.
+Unfortunately, by looking at the literature [1] it turns out that there there is not such a remarkable difference in the values of the frequencies and that the trends of the frequency lines are similar at different temperatures.
+
+
+```{r,echo=F}
+knitr::include_graphics("C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\HOTvsCOLD_spectograms.png")
+```
+
+
+So, how is it possible to classify?
+Some differences in the harmonic content must be there, otherwise no model would be effective.
+We could start from a result based on the distinction between the three different sources of vibration: the container, the water sound and the resonance of the air column in the container, that is, the fundamental resonant frequency at which the wave displacement is at its maximum.
+Apparently, these sources differ in intensity for cold and hot water.
+In particular, the sound of the vibration of the container and the bubbles in the liquid take a dominant role in the sound of pouring **cold water** and the sound o resonance of the air column is more relevant in **hot water**.
+
+In an intuitive way, this can be explained by the fact that the highest frequencies in both hot and cold water sounds are justified in the different case by two different phenomena: there tends to be more bubbling in a liquid that's hot meaning that there are higher frequencies coming from it.
+On the other way cold water is more viscous, causing high pitched ringing.
+
+Hence, we decided to not use the simple power spectrum in the pipeline but to extract features from it.
+
+Since the distinction lies in the sources of vibration, we thought a good choice for the feature extraction could be to rely on low-level features summarizing what in music is called *timbre*, or tone color.
+In the literature [2] many attempts have been made to extract timbre features.
+We decided to design our own method starting from an intuition: the *human ear* can perceive a difference in hot and cold water, no matter how nuanced, by the sound of pouring.
+By means of the feature extraction we wanted to capture what the human ear does when listening and boost the mechanism to make it more accurate.
+The mechanism consists of two fundamental steps:
+
+1.  filter the power spectrum with a Mel Filterbank to return an estimate of the perceived pitch;
+2.  apply Weber-Fechner law of psychophysics that models the intensity of the perception as a logarithm.
+
+The results are vectors of 200 features representing for each window of the filterbank the logarithmic mean of the power spectrum.
+Just to visualize, we can show a plot of the features for very hot (\>80 $^\circ$) and very cold (\<20 $^\circ$) water sounds.
+
+
+```{r,echo=F}
+knitr::include_graphics("C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\features3.png")
+```
++
+
+We can see a difference between them, especially for the first 100 features.
+The model should be able to discriminate among the different audio signals.
+By the first results it turns out that the algorithm, by using the features extracted from the power spectrum, can output roughly the right temperature with a difference degree of correctness depending on the range of temperatures we are considering.
+
+# The statistical framework and some math-behind
+
+Our problem is clearly a regression one: we have to predict water temperature (our response variable) from the sound it makes when poured.
+The real complexity in this problem is to deal with the covariates.
+The background for this model is functional data analysis: in every of our attempts we had to deal with features that are clearly time-dependent or frequency-dependent, or can be considered as discrete sampling from continuos and smooth functions.
+The main reference we adopted is *Introduction to functional data analysis*, an introductive survey in this field by Piotr Kokoszka and Matthew Reimherr.
+In particular we focused on chapter four, where scalar-response-on-functional-variable linear regression is described.
+Since an assumption for a linear underlying model in such a setting could have been a weak hypotesis, we decided to go a little further and try to inject non-linearity in our model.
+We had to choose between two main approaches:
+
+-   the *continuously additive model* where the underlying generating model is \begin{equation}
+    Y_i = \alpha + \int f(X_i(t),t)dt + \epsilon_i
+    \end{equation}
 
 and the functional form $f$ is estimated through a splines expansion;
 
-+ the extension to the functional framework of well known *nonparametric models*. 
+-   the extension to the functional framework of well known *nonparametric models*.
 
 We decided to go for the second option since it was interesting to get deeper in the field of nonparametric statistic and to study the assumptions we have to do to generalize these approaches in a functional settings.
 
 The two models we mainly worked on are two well-known nonparametric estimators of the response function $m(x)$ being $Y_i = m(x_i) + \epsilon_i$ and $m(x) = \mathbb{E}[Y|X=x]$:
 
-1) The Nadaraya-Watson kernel estimator;
-2) The k-Nearest-Neighbours estimator.
+1)  The Nadaraya-Watson kernel estimator;
+2)  The k-Nearest-Neighbours estimator.
 
-Both of this models are based on a concept of distance that requires few adjustments to be used in a functional framework. We are going to consider for now a single functional covariate to define a general approach in approximating distances between functions: the further generalization of this for vectors of functional covariates meets some other issues. 
+Both of this models are based on a concept of distance that requires few adjustments to be used in a functional framework.
+We are going to consider for now a single functional covariate to define a general approach in approximating distances between functions: the further generalization of this for vectors of functional covariates meets some other issues.
 
-Being in a functional space, let's assume $x(t),y(t) \in L^2([0,1])$ and consider a complete orthonormal basis $\mathcal{H} = \{e_j\}_{j=1}^{\infty}$. Under this assumptions Parseval's identity holds.
+Being in a functional space, let's assume $x(t),y(t) \in L^2([0,1])$ and consider a complete orthonormal basis $\mathcal{H} = \{e_j\}_{j=1}^{\infty}$.
+Under this assumptions Parseval's identity holds.
 \begin{equation}
 ||x(t)||_{L^2}^2 = \sum_{j=1}^{\infty} |\langle x(t),e_j(t) \rangle|^2
 \end{equation}
 
-This means that for a distance between function we have the following:
-\begin{equation}
+This means that for a distance between function we have the following: \begin{equation}
 ||x(t)-y(t)||_{L^2}^2 = \sum_{j=1}^{\infty} |\langle x(t)-y(t),e_j(t) \rangle|^2
 \end{equation}
 
-Since the inner product is a bilinear form we have that $\langle x(t)-y(t),e_j(t) \rangle = \langle x(t),e_j(t) \rangle -\langle y(t),e_j(t) \rangle$. This means that we can express the $L^2$-distance between functions as the euclidean distance between the vectors of the projections of the functions on the orthonormal basis:
+Since the inner product is a bilinear form we have that $\langle x(t)-y(t),e_j(t) \rangle = \langle x(t),e_j(t) \rangle -\langle y(t),e_j(t) \rangle$.
+This means that we can express the $L^2$-distance between functions as the euclidean distance between the vectors of the projections of the functions on the orthonormal basis:
 
+```{=tex}
 \begin{gathered}
 ||x(t)-y(t)||_{L^2}^2 = \sum_{j=1}^{\infty} |\langle x(t)-y(t),e_j(t) \rangle|^2 = \nonumber \\
 \sum_{j=1}^{\infty} |\langle x(t),e_j(t) \rangle -\langle y(t),e_j(t) \rangle|^2 =   \nonumber \\
 ||\underline{\beta}_x^{\infty}-\underline{\beta}_y^{\infty}||_2^2
 \end{gathered}
-
+```
 So in the end we can approximate the distance between the two functions through a basis expansions on a certain number $G$ of generators:
 
+```{=tex}
 \begin{equation}
 ||x(t)-y(t)||_{L^2}^2 \approx ||\hat{\beta}_x-\hat{\beta}_y||_2^2
 \end{equation}
-
-where $\hat{\beta}$ is the vector of the empirical Generalized Fouerier Coefficients gathered from a finite basis expansion on an orthonormal basis: in our case we'll go for a cosine basis. This approach requires a basic remapping of the covariates on the domain $[0,1]$.
+```
+where $\hat{\beta}$ is the vector of the empirical Generalized Fouerier Coefficients gathered from a finite basis expansion on an orthonormal basis: in our case we'll go for a cosine basis.
+This approach requires a basic remapping of the covariates on the domain $[0,1]$.
 
 ## Nadaraya-Watson kernel estimator
 
 The Nadarayan-Watson kernel estimator takes the following form:
 
+```{=tex}
 \begin{equation}
 m(X(t)) = \frac{\sum_{i=1}^N Y_iK(h^{-1}d(X_i(t),X(t)))}{\sum_{j=1}^N K(h^{-1}d(X_j(t),X(t)))}
 \end{equation}
-
-Given a new signal $X(t)$ the model predicts the response averaging through the whole dataset building a system of weights based on the distance $d(X_i,X)$, a smoothing kernel $K$ that in our case is the gaussian one and a parameter to be tuned through cross-validation $h$: the size of our datasets allows for a leave one out cross validation routine. 
+```
+Given a new signal $X(t)$ the model predicts the response averaging through the whole dataset building a system of weights based on the distance $d(X_i,X)$, a smoothing kernel $K$ that in our case is the gaussian one and a parameter to be tuned through cross-validation $h$: the size of our datasets allows for a leave one out cross validation routine.
 
 In a classic setting of a single continuously defined covariate $X$ and a continuosly defined response $Y$ we have the following:
 
+```{=tex}
 \begin{equation}
 \mathbb{E}[Y|X=x] = \int yf(y|x)dy = \int \frac{yf(x,y)}{f(x)}dy
 \end{equation}
-
+```
 Through a kernel density estimation with a kernel $K_h$ on both the joint distribution and the marginal on $x$ we have the following estimate for the regression function:
 
+```{=tex}
 \begin{gather}
 \hat{\mathbb{E}}[Y|X=x] = \int \frac{y\hat{f}(x,y)}{\hat{f}(x)}dy = \\ \nonumber
 \int \frac{y\frac{1}{N}\sum_{j=1}^{N} K_h(d(x,x_j))K_h(d(y,y_j))}{\frac{1}{N}\sum_{j=1}^{N} K_h(d(x,x_j))}dy = \\ \nonumber
 \frac{\sum_{j=1}^{N} K_h(d(x,x_j))\int y_jK_h(d(y,y_j))dy}{\sum_{j=1}^{N} K_h(d(x,x_j))} = \\ \nonumber
 \frac{\sum_{j=1}^{N} K_h(d(x,x_j))y_j}{\sum_{j=1}^{N} K_h(d(x,x_j))}
 \end{gather}
-
+```
 So our estimator has the same structure and derivation as the one above expect for the definition of distance involved.
 
 ## k-Nearest-Neighbours regression
 
 In this case the estimate for a regression function is just a local average of the response of the $K$ nearest data points: again in our case it is as the same as the classic formulation, except for the definition of distance.
 
+```{=tex}
 \begin{equation}
 \hat{m}(x) = \frac{1}{|K_{nn}|} \sum_{k \in K_{nn}} Y_k
 \end{equation}
-
-Again the parameter $K$ can be validate through a LOOCV routine. 
+```
+Again the parameter $K$ can be validate through a LOOCV routine.
 
 # Implementation - the failures
 
 ## Mel Filters Cepstrum Coefficients: from a single functional covariate to multiple functional covariates
 
-One of the standard approaches when dealing with audio processing in machine learning especially in classification are Mel Filters Cepstrum Coefficients (MFCC). This feature extraction pipeline resambles the behaviour of the evolution of the spectrogram, and the global effect is to gather from an audio the information that mostly are related with the way our ears actually hear. 
+One of the standard approaches when dealing with audio processing in machine learning especially in classification are Mel Filters Cepstrum Coefficients (MFCC).
+This feature extraction pipeline resambles the behaviour of the evolution of the spectrogram, and the global effect is to gather from an audio the information that mostly are related with the way our ears actually hear.
 
-So we implemented with simple Python scripts an extraction pipeline working on the benchmark dataset leveraging ```librosa``` modules: 
+So we implemented with simple Python scripts an extraction pipeline working on the benchmark dataset leveraging `librosa` modules:
 
 ```{python,eval=F}
 import os 
@@ -157,8 +233,8 @@ for file in tqdm.tqdm(paper_files):
     dic_2[file]['Label'] = float(file.split('_')[3][:-4])
 ```
 
-The point was that now we did not have a single covariate for each audio; now we have for each audio a vector of functional data, well represented by a matrix having a number of rows equal to the number of filters and a variable number of columns equal to the output of the extraction pipeline. 
-So first of all we leveraged ```sklearn.fda``` modules to project this data on a cosine basis after a remapping such that $ t \in [0,1]$ in order to use the previous consideration we made on the approximation for distances between functions:
+The point was that now we did not have a single covariate for each audio; now we have for each audio a vector of functional data, well represented by a matrix having a number of rows equal to the number of filters and a variable number of columns equal to the output of the extraction pipeline.
+So first of all we leveraged `sklearn.fda` modules to project this data on a cosine basis after a remapping such that \$ t \in [0,1]\$ in order to use the previous consideration we made on the approximation for distances between functions:
 
 ```{python, eval=F}
 # Functional tool kit
@@ -207,17 +283,20 @@ for i in tqdm.tqdm(range(len(dic_2.keys()))):
 y_true = np.array([dic_2[key]['Label'] for key in dic_2.keys()])
 ```
 
-Now the question was how to generalize the consideration we made about distances between functions now that every audio is represented by the following matrix: 
+Now the question was how to generalize the consideration we made about distances between functions now that every audio is represented by the following matrix:
 
+```{=tex}
 \begin{pmatrix} 
 \text{___}f_1(t)\text{___} \\ 
 \text{___}f_2(t)\text{___} \\ 
 \vdots \\ 
 \text{___}f_p(t)\text{___} 
 \end{pmatrix}
+```
+being $p=20$ the number of Mel filters deployed and being every row the collection of the empirical GFC for that filter.
+So we now have for each of the j-th audio signal a matrix $F_j$: the intuition was to consider the distance between each of the related components, gathering the following vector:
 
-being $p=20$ the number of Mel filters deployed and being every row the collection of the empirical GFC for that filter. So we now have for each of the j-th audio signal a matrix $F_j$: the intuition was to consider the distance between each of the related components, gathering the following vector: 
-
+```{=tex}
 \begin{equation}
 d(F_i,F_k) = \begin{pmatrix} 
 d(f_{1i}(t),f_{1k}(t)) \\ 
@@ -226,31 +305,37 @@ d(f_{2i}(t),f_{2k}(t)) \\
 d(f_{pi}(t),f_{pk}(t))
 \end{pmatrix}
 \end{equation}
+```
+The problem still was how to plug-in this vector of "component-wise" distance in our distance-based estimator.
+We came across the article *Nonparametric regression and classification with functional, categorical, and mixed covariates*, by Leonie Selk and Jan Gertheiss, from *Advances in Data Analysis and Classification* (2023).
+The idea is to leverage the properties of an exponential multidimensional kernel estimator to be rewritten as follow:
 
-The problem still was how to plug-in this vector of "component-wise" distance in our distance-based estimator. We came across the article *Nonparametric regression and classification with functional, categorical, and mixed covariates*, by Leonie Selk and Jan Gertheiss, from *Advances in Data Analysis and Classification* (2023). The idea is to leverage the properties of an exponential multidimensional kernel estimator to be rewritten as follow: 
-
+```{=tex}
 \begin{equation}
 \hat{m}(x) = \frac{\sum_{i=1}^N Y_iK(\omega_1 d_1(X_{i1},x_{1})) + ... + \omega_p d_p(X_{ip},x_p))}{\sum_{i=1}^K(\omega_1 d_1(X_{i1},x_{1})) + ... + \omega_p d_p(X_{ip},x_p))}
 \end{equation}
+```
+where $x = (x_1, ..., x_p)^T$ is the vector of miscellaneous covariates.
+The power of the proposed framework is that we can implement this for a wide mixture of typologies of variables, up to the requirements that we must have a definition of distance for each of those, so this apply to our multiple functional covariates scenario.
 
-where $x = (x_1, ..., x_p)^T$ is the vector of miscellaneous covariates. The power of the proposed framework is that we can implement this for a wide mixture of typologies of variables, up to the requirements that we must have a definition of distance for each of those, so this apply to our multiple functional covariates scenario. 
+Given the kernel estimator, we can write the associated leave one out cross validation error as
 
-Given the kernel estimator, we can write the associated leave one out cross validation error as 
-
+```{=tex}
 \begin{equation}
 \hat{Err}(\omega_1,...,\omega_p) = \sum_{i=1}^N (Y_i - \hat{Y}_{(-i)})^2
 \end{equation}
-
+```
 and define the following optimization problem:
 
+```{=tex}
 \begin{cases}
 \underset{\omega_1,...,\omega_p}{\mathrm{min}} \hat{Err} \\
 \omega_i \geq 0 & i = 1,...,p
 \end{cases}
+```
+In a way this becomes a sort of semiparametric approach to the problem, or an extended validation procedure where we are forcing optimality rather than do a classic grid search.
 
-In a way this becomes a sort of semiparametric approach to the problem, or an extended validation procedure where we are forcing optimality rather than do a classic grid search. 
-
-The following Python code defines the routine needed to implement this optimization problem to be solved by ```scipy.optimize```'s module ```minimize```.
+The following Python code defines the routine needed to implement this optimization problem to be solved by `scipy.optimize`'s module `minimize`.
 
 ```{python, eval=F}
 # Non-parametric regression on a vectorial functional space 
@@ -311,23 +396,28 @@ def objective(params):
 The result was quiet weak despite our good intentions:
 
 ```{r,echo=F}
-knitr::include_graphics("immagine/img1.png")
+knitr::include_graphics("C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\img1.png")
 ```
 
-We could only achieve values for the RMSE of around 19, that is far worse than our best results. This could be due to several reasons: 
+We could only achieve values for the RMSE of around 19, that is far worse than our best results.
+This could be due to several reasons:
 
-+ The audio needed more pre-processing in order to gather finer features when applying MFCC;
+-   The audio needed more pre-processing in order to gather finer features when applying MFCC;
 
-+ Consequently, the coefficients of the basis expansion shows non regular behaviours;
+-   Consequently, the coefficients of the basis expansion shows non regular behaviours;
 
-+ The optimization routine lacks in precision because of the initialization: a local search could have been a good improvement for a correct initialization, and maybe further optimization strategies like sequential or block decomposition ones could have improved the result;
+-   The optimization routine lacks in precision because of the initialization: a local search could have been a good improvement for a correct initialization, and maybe further optimization strategies like sequential or block decomposition ones could have improved the result;
 
-By the way this implementation was very formative, especially because this forced us to learn about MFCC that was the basis for our personalized feature extraction. 
+By the way this implementation was very formative, especially because this forced us to learn about MFCC that was the basis for our personalized feature extraction.
 
-## Bagging cross validation for the bandwidth 
-Before we realized that the dimension of our dataset perfectly allows for a full LOOCV pipeline, we were wondering about a fancy validation procedure to complete the state-of-art formation we gathered through the homeworks (nested cross validation, LOCO). We decided to implement bagging cross validation from the bandwidth in Nadaraya-Watson estimator as it is described in *Bagging cross-validated bandwidth selection in nonparametric regression estimation with applications to large-sized samples*, where the idea is actually very simple. In large dataset we can perform LOOCV for optimization on repeated subsamples of the data and then average the optimal value on each of the subsample. The optimal sample size minimizing the variance of this estimate is $r = \frac{n}{3\sqrt{N}}$, being $n$ the dataset size and $N$ the number of repeated subsampling. This expression is expressive enough to conclude that for small datasets this is completely unuseful and makes the whole procedure instable, but it was helpful since made us realize that in our case LOOCV was not so computationally expensive. 
+## Bagging cross validation for the bandwidth
 
+Before we realized that the dimension of our dataset perfectly allows for a full LOOCV pipeline, we were wondering about a fancy validation procedure to complete the state-of-art formation we gathered through the homeworks (nested cross validation, LOCO).
+We decided to implement bagging cross validation from the bandwidth in Nadaraya-Watson estimator as it is described in *Bagging cross-validated bandwidth selection in nonparametric regression estimation with applications to large-sized samples*, where the idea is actually very simple.
+In large dataset we can perform LOOCV for optimization on repeated subsamples of the data and then average the optimal value on each of the subsample.
+The optimal sample size minimizing the variance of this estimate is $r = \frac{n}{3\sqrt{N}}$, being $n$ the dataset size and $N$ the number of repeated subsampling.
+This expression is expressive enough to conclude that for small datasets this is completely unuseful and makes the whole procedure instable, but it was helpful since made us realize that in our case LOOCV was not so computationally expensive.
 
 # Implementation - the successes
 
-# Result and comments 
+# Result and comments
