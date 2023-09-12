@@ -3,7 +3,7 @@ title: "Statistical Learning - Final Project Report"
 author: "Alvetreti - Corrias - Dicunta - Di Nino"
 date: "2023-09-14"
 bibliography: bibliography.bib
-csl: journal-of-information-technology.csl
+
 header-includes:
   - \usepackage{fancyhdr}
   - \usepackage{makeidx}
@@ -54,7 +54,7 @@ We see that both of them decrease as the temperature increases.
 
 <center>
 
-![*Fig. 1*. Density and Viscosity vs temperature](C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\density_viscosity.png){width=50%}
+![*Fig. 1*. Density and Viscosity vs temperature](IMG\\density_viscosity.png){width=50%}
 
 </center>
 
@@ -70,7 +70,7 @@ Unfortunately, by looking at the literature [@Psycoacoustic] it turns out that t
 
 <center>
 
-![*Fig. 2*. Hot and Cold water pouring spectrograms](C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\HOTvsCOLD_spectograms.png){width=50%}
+![*Fig. 2*. Hot and Cold water pouring spectrograms](IMG\HOTvsCOLD_spectograms.png){width=50%}
 
 </center>
 
@@ -100,7 +100,7 @@ Just to visualize, we can show a plot of the features for very hot (\>80 $^\circ
 
 <center>
 
-![*Fig. 3*. Extracted features for hot and cold water](C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\features3.png){width=50%}
+![*Fig. 3*. Extracted features for hot and cold water](IMG\\features3.png){width=90%}
 
 </center>
 We can see a difference between them, especially for the first 100 features.
@@ -406,7 +406,7 @@ def objective(params):
 The result was quiet weak despite our good intentions:
 
 ```{r,echo=F}
-knitr::include_graphics("C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\img1.png")
+knitr::include_graphics("IMG\\img1.png")
 ```
 
 We could only achieve values for the RMSE of around 19, that is far worse than our best results.
