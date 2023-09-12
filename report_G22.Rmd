@@ -2,6 +2,8 @@
 title: "Statistical Learning - Final Project Report"
 author: "Alvetreti - Corrias - Dicunta - Di Nino"
 date: "2023-09-14"
+bibliography: bibliography.bib
+csl: journal-of-information-technology.csl
 header-includes:
   - \usepackage{fancyhdr}
   - \usepackage{makeidx}
@@ -27,6 +29,11 @@ editor_options:
     wrap: sentence
 ---
 
+```{r, include=FALSE}
+knitr::write_bib(x = c("knitr", "rmarkdown") , file = "test.bib")
+```
+
+
 ```{r setup, include=FALSE}
 library(reticulate)
 knitr::opts_chunk$set(echo = TRUE)
@@ -40,15 +47,16 @@ knitr::opts_chunk$set(echo = TRUE)
 
 In order to understand *a priori* how the algorithm will output the predicted temperature, we thought a physical explanation of the phenomenon could be useful.
 In particular, since we start from the power spectrum, the vibrational phenomena are particularly significant.
-Let's start from a premise: it makes sense to think you can determine the water temperature by the sound it makes while poured.
+Let's start from a premise: it makes sense to think you can determine the water temperature by the sound it makes while poured [@Thermophone].
 This is true both for empirical evidence (even human ear could detect a difference) both for the change in viscosity and density due to a variation of the temperature.
 We see that both of them decrease as the temperature increases.
 
 
-```{r,echo=F}
-knitr::include_graphics("C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\density_viscosity.png")
-```
+<center>
 
+![*Fig. 1*. Density and Viscosity vs temperature](C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\density_viscosity.png){width=50%}
+
+</center>
 
 The intuition is to analyse the sound made by pouring water in a way that the algorithm can classify from it.
 The approach is to study the intensities of different **frequencies** making up the sound.
@@ -56,13 +64,15 @@ Notice that these frequencies are the acoustic emissions formed by air bubbles w
 After formation, these bubbles emit a *sinusoidal sound* which decays as energy is dissipated.
 
 Hence, we could think that the harmonic content is different for cold and hot water.
-Unfortunately, by looking at the literature [1] it turns out that there there is not such a remarkable difference in the values of the frequencies and that the trends of the frequency lines are similar at different temperatures.
+Unfortunately, by looking at the literature [@Psycoacoustic] it turns out that there there is not such a remarkable difference in the values of the frequencies and that the trends of the frequency lines are similar at different temperatures.
 
 
-```{r,echo=F}
-knitr::include_graphics("C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\HOTvsCOLD_spectograms.png")
-```
 
+<center>
+
+![*Fig. 2*. Hot and Cold water pouring spectrograms](C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\HOTvsCOLD_spectograms.png){width=50%}
+
+</center>
 
 So, how is it possible to classify?
 Some differences in the harmonic content must be there, otherwise no model would be effective.
@@ -76,7 +86,7 @@ On the other way cold water is more viscous, causing high pitched ringing.
 Hence, we decided to not use the simple power spectrum in the pipeline but to extract features from it.
 
 Since the distinction lies in the sources of vibration, we thought a good choice for the feature extraction could be to rely on low-level features summarizing what in music is called *timbre*, or tone color.
-In the literature [2] many attempts have been made to extract timbre features.
+In the literature [@timbre] many attempts have been made to extract timbre features.
 We decided to design our own method starting from an intuition: the *human ear* can perceive a difference in hot and cold water, no matter how nuanced, by the sound of pouring.
 By means of the feature extraction we wanted to capture what the human ear does when listening and boost the mechanism to make it more accurate.
 The mechanism consists of two fundamental steps:
@@ -88,11 +98,11 @@ The results are vectors of 200 features representing for each window of the filt
 Just to visualize, we can show a plot of the features for very hot (\>80 $^\circ$) and very cold (\<20 $^\circ$) water sounds.
 
 
-```{r,echo=F}
-knitr::include_graphics("C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\features3.png")
-```
-+
+<center>
 
+![*Fig. 3*. Extracted features for hot and cold water](C:\\Users\\ASUS\\OneDrive\\Data Science_MasterDegree\\2nd year\\StatLearning\\TerMike\\features3.png){width=50%}
+
+</center>
 We can see a difference between them, especially for the first 100 features.
 The model should be able to discriminate among the different audio signals.
 By the first results it turns out that the algorithm, by using the features extracted from the power spectrum, can output roughly the right temperature with a difference degree of correctness depending on the range of temperatures we are considering.
