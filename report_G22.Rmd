@@ -43,7 +43,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Data collection and experimental design
 
-The dataset we used deals with 642 audio signals,  each representing the sound produced while pouring water at a certain temperature (label). To reach a valid number of samples for the regression problem we both took manually our data and retrieved 333 tracks from the paper [@Thermophone]. The setup for the measurement was made in a way to ensure **reproducibility** for all the members of the group.
+The dataset we used deals with 642 audio signals,  each representing the sound produced while pouring water at a certain temperature (label). To reach a valid number of samples for the regression problem we both took manually our data and retrieved 333 tracks from the realated [@Thermophone]. The setup for the measurement was made in a way to ensure **reproducibility** for all the members of the group.
 
 In particular, an **online application** was written to get the audio with the same digital characteristics such as the compression algorithm, the sampling rate and so on.  
 
@@ -132,7 +132,7 @@ Just to visualize, we can show a plot of the features for very hot (\>80 $^\circ
 
 <center>
 
-![**Fig. 5**. Extracted features for hot and cold water](IMG\\features3.png){width=90%}
+![**Fig. 5**. Extracted features for hot and cold water](IMG\\features4.png){width=90%}
 
 </center>
 We can see a difference between them, especially for the first 100 features.
@@ -437,9 +437,6 @@ def objective(params):
 
 The result was quiet weak despite our good intentions:
 
-```{r,echo=F}
-knitr::include_graphics("IMG\\img1.png")
-```
 
 
 <center>
