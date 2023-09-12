@@ -43,6 +43,38 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Data collection and experimental design
 
+The dataset we used deals with 642 audio signals,  each representing the sound produced while pouring water at a certain temperature (label). To reach a valid number of samples for the regression problem we both took manually our data and retrieved 333 tracks from the paper [@Thermophone]. The setup for the measurement was made in a way to ensure **reproducibility** for all the members of the group.
+
+In particular, an **online application** was written to get the audio with the same digital characteristics such as the compression algorithm, the sampling rate and so on.  
+
+<center>
+
+![**Fig. 1**. Streamlit application ](IMG\\app1.png){width=40%}
+
+</center>
+
+
+Notice we added to our original dataset another variable containing the information on the person taking that particular measurement. In this way it could be possible to eventually use it as feature to better classify the temperature. Unfortunately, with the feature extraction we implemented this information turned out to be useless.  
+
+
+The application served also as **centralized** collector of data that allowed us to keep track of all the measurements at any time. 
+
+In the end, the labels resulted quite balanced, with a greater number of related observations at the middle temperatures, that is, in the range [30$^\circ$, 60$^\circ$]
+
+<center>
+
+![**Fig. 2**. Histogram of data](IMG\\data_hist.png){width=50%}
+
+</center>
+
+The standards of the experimental measurements were fixed such that we could use everyday objects. In particular, we used: 
+
+- two metallic containers, one for pouring, on to pour on. The distance between the former and the latter was set at 10 cm; 
+- a food thermometer having precision $\pm 0.5^\circ$;
+- our amazing app by which we could use any device equipped with a microphone. 
+
+They differ from the measurements from the paper in the material of the containers, the accuracy of the thermometer (there $\pm 1^\circ$) and the microphone which, in their case, was specifically a microphone from a computer headset. These observation were used as benchmark for the first attempts with our model. 
+
 # Feature extraction and physical phenomenon
 
 In order to understand *a priori* how the algorithm will output the predicted temperature, we thought a physical explanation of the phenomenon could be useful.
@@ -54,7 +86,7 @@ We see that both of them decrease as the temperature increases.
 
 <center>
 
-![*Fig. 1*. Density and Viscosity vs temperature](IMG\\density_viscosity.png){width=50%}
+![**Fig. 3**. Density and Viscosity vs temperature](IMG\\density_viscosity.png){width=50%}
 
 </center>
 
@@ -70,7 +102,7 @@ Unfortunately, by looking at the literature [@Psycoacoustic] it turns out that t
 
 <center>
 
-![*Fig. 2*. Hot and Cold water pouring spectrograms](IMG\HOTvsCOLD_spectograms.png){width=50%}
+![**Fig. 4**. Hot and Cold water pouring spectrograms](IMG\HOTvsCOLD_spectograms.png){width=50%}
 
 </center>
 
@@ -100,7 +132,7 @@ Just to visualize, we can show a plot of the features for very hot (\>80 $^\circ
 
 <center>
 
-![*Fig. 3*. Extracted features for hot and cold water](IMG\\features3.png){width=90%}
+![**Fig. 5**. Extracted features for hot and cold water](IMG\\features3.png){width=90%}
 
 </center>
 We can see a difference between them, especially for the first 100 features.
@@ -408,6 +440,13 @@ The result was quiet weak despite our good intentions:
 ```{r,echo=F}
 knitr::include_graphics("IMG\\img1.png")
 ```
+
+
+<center>
+
+![**Fig. 6**. Output of the minimizer](IMG\\img1.png){width=50%}
+
+</center>
 
 We could only achieve values for the RMSE of around 19, that is far worse than our best results.
 This could be due to several reasons:
