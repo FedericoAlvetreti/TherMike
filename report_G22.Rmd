@@ -5,6 +5,10 @@ date: "2023-09-14"
 bibliography: bibliography.bib
 
 header-includes:
+  - \documentclass{article}
+  - \RequirePackage{filecontents}
+  - \usepackage[numbers]{natbib} 
+  - \bibliographystyle{spbasic-nosort}
   - \usepackage{fancyhdr}
   - \usepackage{makeidx}
   - \makeindex
@@ -41,9 +45,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # TherMike - hearing hot loud
 
+We were inspired by Mr.Brutti sound experiments and we decided to dig deeper in the problem. TherMike arises as the opportunity to deploy a machine learning model that can interpret or explain a phenomenon that is actually well known in neurosciences and psychoacoustics: how is it possible for our ear and brain to collect and decode information that are apparently unrelated with what we are actually hearing? 
+So, we decided not to build a model “simply” capable of classifying if the water is cold or hot given its splashing sound: we wanted to build a real thermometer able to listen to temperature. 
+
+This makes our problem a regression one: given a pouring sound, we want to predict  the temperature. Now lots of questions arises, and we had to deal with them. 
+
 # Data collection and experimental design
 
-The dataset we used deals with 642 audio signals,  each representing the sound produced while pouring water at a certain temperature (label). To reach a valid number of samples for the regression problem we both took manually our data and retrieved 333 tracks from the realated [@Thermophone]. The setup for the measurement was made in a way to ensure **reproducibility** for all the members of the group.
+The dataset we used deals with 642 audio signals, each representing the sound produced while pouring water at a certain temperature (ground truth label). In order to reach a valid number of samples for the regression problem we both took manually our data and retrieved 333 tracks from a related independent work [@Thermophone]. The setup for the measurement was made in a way to ensure **reproducibility** for all the members of the group.
 
 In particular, an **online application** was written to get the audio with the same digital characteristics such as the compression algorithm, the sampling rate and so on.  
 
@@ -54,7 +63,7 @@ In particular, an **online application** was written to get the audio with the s
 </center>
 
 
-Notice we added to our original dataset another variable containing the information on the person taking that particular measurement. In this way it could be possible to eventually use it as feature to better classify the temperature. Unfortunately, with the feature extraction we implemented this information turned out to be useless.  
+Please notice that we added to our original dataset another variable containing the information on the person taking that particular measurement. In this way it could be possible to eventually use it as feature to better classify the temperature. Unfortunately, with the feature extraction we implemented this information turned out to be useless.  
 
 
 The application served also as **centralized** collector of data that allowed us to keep track of all the measurements at any time. 
@@ -441,7 +450,7 @@ The result was quiet weak despite our good intentions:
 
 <center>
 
-![**Fig. 6**. Output of the minimizer](IMG\\img1.png){width=50%}
+![**Fig. 6**. Output of the minimizer](IMG\\img1.png){width=75%}
 
 </center>
 
@@ -450,7 +459,9 @@ This could be due to several reasons:
 
 -   The audio needed more pre-processing in order to gather finer features when applying MFCC;
 
--   Consequently, the coefficients of the basis expansion shows non regular behaviours;
+-   Consequently, the coefficients of the basis expansion shows non regular behaviour;
+
+-   We could have introduced a regularization tool in basis expansion or in the actual model through RKHS;
 
 -   The optimization routine lacks in precision because of the initialization: a local search could have been a good improvement for a correct initialization, and maybe further optimization strategies like sequential or block decomposition ones could have improved the result;
 
@@ -464,6 +475,69 @@ In large dataset we can perform LOOCV for optimization on repeated subsamples of
 The optimal sample size minimizing the variance of this estimate is $r = \frac{n}{3\sqrt{N}}$, being $n$ the dataset size and $N$ the number of repeated subsampling.
 This expression is expressive enough to conclude that for small datasets this is completely unuseful and makes the whole procedure instable, but it was helpful since made us realize that in our case LOOCV was not so computationally expensive.
 
+## Our dataset is very noisy
+
+Unfortunately our dataset seems to bring noisy information. We tested our model through a LOOCV with $N = 200$ Mel filters and the optimal bandwidth and the results are that without our dataset the RMSE is circa 5.89, while including our data on the benchmark ones we have an increased RMSE of circa 8.9: our data brings more noise than information. Let's finally have a look to our unique model! 
+
 # Implementation - the successes
 
+So going back to our actual work, we have the following scenario. We processed each audio with our customized pipeline extraction, retrieving for each audio a vector of $N = 200$ covariates. We then proceeded to validate the bandwidth $h$ for the Nadaraya-Watson estimator and the number of neighbours $K$ to consider in the k-NN regression through a LOOCV routine: every of the functions involved is contained in our tools library ```utils.R```.
+<center>
+![**Fig. 7**. Grid search for the bandwidth in Kernel Regression](IMG\\LOOCV_h.png){width=75%}
+</center>
+
+<center>
+![**Fig. 8**. Grid search for K in kNN regression](IMG\\LOOCV_K.png){width=75%}
+</center>
+
+What we came up with is that increasing the number of Mel filters involved in the feature extraction, the estimate of the prediction error decreases. 
+
 # Result and comments
+
+The following table resumes our best model results with the optimized hyperparameters:
+
+```{r finalTab, echo=F}
+
+KR <- c('Model'='Kernel regression','Optimized hyperparameter'='Bandwidth',
+        'Validated hyperparameter'=2.0408, 'RMSE'=5.8674)
+
+kNN <- c('Model'='kNN regression','Optimized hyperparameter'='K',
+        'Validated hyperparameter'=2, 'RMSE'=6.3303)
+
+df <- data.frame(rbind(KR,kNN))
+
+knitr::kable(df)
+```
+
+We actually did not improve the result that the related work we considered had implementing gradient boosting: we are happy to have built our own model from the feature extraction to the implementation from scratch. 
+
+## Interpretability (?)
+
+From an interpretability perspective we would have had a better scenario in the case that we fully realized the vectorial implementation of the multiple kernel regression: in that case the weights would have provided a better idea of the relevance of the features. In this case instead we only have one parameter and no hierarchy to be evaluated within the model.
+
+By the way we can make some further considerations: for example we can have a look to a sort of sensitive metric considering the percentage of predictions binning in a range of 5 degrees from the ground truth labels. On average the 57,96% of the predictions are in a range of 5 degrees from the true label and we are going to have a look to how it performs in different ranges from this perspective. 
+
+```{r secondTab,echo=F}
+
+r1 <- c('Range'='0-20','Sensitivity'=0.8750)
+r2 <- c('Range'='20-40','Sensitivity'=0.7293)
+r3 <- c('Range'='40-60','Sensitivity'=0.3457)
+r4 <- c('Range'='60-80','Sensitivity'=0.3573)
+r5 <- c('Range'='80-100','Sensitivity'=NA)
+
+knitr::kable(rbind(r1,r2,r3,r4,r5))
+```
+
+As we can see our model is way more sensitive for the error range $\pm 5$ degrees for lower temperatures: visually we can see that features extracted for cold water are less dispersive for the central filters than the ones extracted for hot water:
+
+
+<center>
+![**Fig. 9**. Features extracte for water of temperature < 20](IMG\\cold.png){width=75%}
+</center>
+
+<center>
+![**Fig. 10**. Features extracte for water of temperature > 80](IMG\\hot.png){width=75%}
+</center>
+
+A good last way to improve interpretability could be to implement conformal prediction for our kernel regression model and see how the conformal sets change in size when increasing the ground thruth temperature label, but going deeper into nonparametric statistics and set estimation is another adventure. 
+
