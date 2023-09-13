@@ -173,7 +173,7 @@ The two models we mainly worked on are two well-known nonparametric estimators o
 1)  The Nadaraya-Watson kernel estimator;
 2)  The k-Nearest-Neighbours estimator.
 
-Both of this models are based on a concept of distance that requires few adjustments to be used in a functional framework.
+Both of this models are based on a **concept of distance** that requires few adjustments to be used in a functional framework.
 We are going to consider for now a single functional covariate to define a general approach in approximating distances between functions: the further generalization of this for vectors of functional covariates meets some other issues.
 
 Being in a functional space, let's assume $x(t),y(t) \in L^2([0,1])$ and consider a complete orthonormal basis $\mathcal{H} = \{e_j\}_{j=1}^{\infty}$.
@@ -203,7 +203,7 @@ So in the end we can approximate the distance between the two functions through 
 ||x(t)-y(t)||_{L^2}^2 \approx ||\hat{\beta}_x-\hat{\beta}_y||_2^2
 \end{equation}
 ```
-where $\hat{\beta}$ is the vector of the empirical Generalized Fouerier Coefficients gathered from a finite basis expansion on an orthonormal basis: in our case we'll go for a cosine basis.
+where $\hat{\beta}$ is the vector of the empirical Generalized Fourier Coefficients gathered from a finite basis expansion on an orthonormal basis: in our case we'll go for a cosine basis.
 This approach requires a basic remapping of the covariates on the domain $[0,1]$.
 
 ## Nadaraya-Watson kernel estimator
@@ -285,7 +285,7 @@ for file in tqdm.tqdm(paper_files):
 ```
 
 The point was that now we did not have a single covariate for each audio; now we have for each audio a vector of functional data, well represented by a matrix having a number of rows equal to the number of filters and a variable number of columns equal to the output of the extraction pipeline.
-So first of all we leveraged `sklearn.fda` modules to project this data on a cosine basis after a remapping such that \$ t \in [0,1]\$ in order to use the previous consideration we made on the approximation for distances between functions:
+So first of all we leveraged `sklearn.fda` modules to project this data on a cosine basis after a remapping such that $t \in [0,1]$ in order to use the previous consideration we made on the approximation for distances between functions:
 
 ```{python, eval=F}
 # Functional tool kit
@@ -477,7 +477,7 @@ This expression is expressive enough to conclude that for small datasets this is
 
 ## Our dataset is very noisy
 
-Unfortunately our dataset seems to bring noisy information. We tested our model through a LOOCV with $N = 200$ Mel filters and the optimal bandwidth and the results are that without our dataset the RMSE is circa 5.89, while including our data on the benchmark ones we have an increased RMSE of circa 8.9: our data brings more noise than information. Let's finally have a look to our unique model! 
+Unfortunately our dataset seems to bring noisy information. We tested our model through a LOOCV with $N = 200$ Mel filters and the optimal bandwidth and the results are that without our dataset the RMSE is roughly 5.89, while including our data on the benchmark ones we have an increased RMSE of circa 8.9: our data brings more noise than information. Let's finally have a look to our unique model! 
 
 # Implementation - the successes
 
