@@ -1,0 +1,21 @@
+DATA COLLECTION  (Ioans)
+	- Experimental design
+	- Web application for data collection
+FEATURE ENGINEERING (Lucia)
+	- Physical model behind the problem
+	- Personalized feature extraction pipeline: motivation
+	- Personalized feature extraction pipeline: code (Federico (?))
+STATISTICAL FRAMEWORK 
+	- The regression problem in functional scenario (Ioans)
+	- Rebranding distances (Leonardo)
+	- Defining our models (Lucia)
+FAILURES    
+	- Multidimensional nonparametric regression (Leonardo + Federico)
+	- Bagging cross validation (Lucia)
+	- Data quality assessment + LMAO (Ioans)
+SUCCESSES	(Federico)
+	- The code 
+	- The results
+INTERPRETABILITY (Lucia)
+	- Some comments
+DEMO (Ioan)
