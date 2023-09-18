@@ -417,13 +417,21 @@ mel_filter_features <- function(audio_obj_list, n = 200){
 # kNN regression ----------------------------------------------------------
 
 kNN_predict_audio <- function(train_set, new_data, K) {
+  
+  # Initialize data structure to store distances and labels
   distances_matrix <- matrix(NA,nrow=length(train_set),ncol=2)
+  
+  # Main loop for pair-wise distances
   for (i in 1:length(train_set)) {
     audio <- train_set[[i]]
     distances_matrix[i,1] <- L2(audio$Mel, new_data$Mel)
     distances_matrix[i,2] <- audio$Label
   }
+  
+  # Sort by increasing distance and retrieve the kNN
   idxs <- order(distances_matrix[,1])[1:K]
+  
+  # Retrieve the mean of the labels of the kNN
   return(mean(distances_matrix[idxs,2]))
 }
 
@@ -502,9 +510,6 @@ KR_predict_audio <- function(train_set, new_data, h){
   
   names(weights_df) <- c("Weight", "Label")
   
-  # Sort by weight
-  weights_df <- weights_df[order(weights_df$Weight, decreasing = T), ]
-  
   # Evaluate prediction
   tot_weight <- sum(weights_df$Weight)
   prediction <- sum(weights_df$Weight * weights_df$Label) / tot_weight
@@ -514,9 +519,8 @@ KR_predict_audio <- function(train_set, new_data, h){
   return(prediction)
 }
 
-
 # Multiple prediction
-KR_predict_set <- function(train_set, test_set, h, k = 0){
+KR_predict_set <- function(train_set, test_set, h){
   
   # Set up a dataframe to store predictions
   preds <- data.frame()
@@ -524,7 +528,7 @@ KR_predict_set <- function(train_set, test_set, h, k = 0){
   # Predict for each element in the test_set
   for(audio in test_set){
     preds <- rbind(preds, 
-                   c(audio$Label, KR_predict_audio(train_set, audio, h, k)))
+                   c(audio$Label, KR_predict_audio(train_set, audio, h)))
   }
   
   names(preds) <- c("Label", "Prediction") # Add column names
