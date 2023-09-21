@@ -63,7 +63,8 @@ get_audio_object <- function(audio_file_path){
   sampling_rate <- audio@samp.rate
   
   # Get frequencies
-  frequencies <- c(0:(n-1)) * (sampling_rate / n)
+  freq_step <- (sampling_rate / n)
+  frequencies <- c(0:(n-1)) * freq_step
   frequencies <- frequencies[1:(n %/% 2)] # Halve since it is real valued
   
   # Get power spectrum
@@ -85,8 +86,6 @@ get_audio_object <- function(audio_file_path){
               "Sample_size" = n,
               "Sampling_rate" = sampling_rate))
 }
-
-
 # Get all audio objects given a folder path
 get_audio_objects <- function(directory_path){
   
@@ -116,86 +115,6 @@ get_audio_objects <- function(directory_path){
   close(pb) 
   return(audio_objects)
 }
-
-
-# Compute the spectrogram of a given audio object
-spectro <- function(data, nfft = 1024, window = 256, overlap = 128, t0=0, 
-                   plot_spec = T, normalize = T, return_data = F){
-  
-  library(signal)
-  library(oce)
-  
-  # Get audio signal
-  snd = data$Recording
-  
-  # Demean to remove DC offset
-  snd = snd - mean(snd)
-  
-  # Calculate duration
-  dur = length(snd) / data$Sampling_rate
-  
-  # Create spectrogram
-  spec = specgram(x = snd,
-                  n = nfft,
-                  Fs = data$Sampling_rate,
-                  window = window,
-                  overlap = overlap)
-  
-  
-  P = abs(spec$S) # Discard phase info
-  
-  if(normalize) P = P/max(P) # Normalize
-  
-  P = 10 * log10(P) # Convert to dB
-  
-  # Config time axis
-  if(t0 == 0) t = as.numeric(spec$t) else t = as.POSIXct(spec$t, origin = t0)
-  
-  f = spec$f # Rename freq
-  
-  if(plot_spec){
-    
-    # Change plot color defaults
-    par(bg = "black")
-    par(col.lab="white")
-    par(col.axis="white")
-    par(col.main="white")
-    
-    # Plot spectrogram
-    imagep(t, f, t(P), col = oce.colorsViridis, drawPalette = T,
-           ylab = 'Frequency [Hz]', axes = F)
-    
-    box(col = 'white')
-    axis(2, labels = T, col = 'white')
-    title(main = data$Label)
-    
-    # Add x axis
-    if(t0 == 0){
-      
-      axis(1, labels = T, col = 'white')
-      
-    } else {
-      
-      axis.POSIXct(seq.POSIXt(t0, t0+dur, 10), side = 1, 
-                   format = '%H:%M:%S', col = 'white', las = 1)
-      
-      mtext(paste0(format(t0, '%B %d, %Y')), side = 1, adj = 0,
-            line = 2, col = 'white')
-    }
-  }
-  
-  if(return_data){
-    
-    spec = list(
-      t = t,
-      f = f,
-      p = t(P)
-    )
-    
-    return(spec)  
-  }
-}
-
 
 # Distances ---------------------------------------------------------------
 
@@ -305,59 +224,6 @@ plot_labels <- function(recordings, k){
 }
 
 
-# Functional Feature Extraction -------------------------------------------
-
-
-# Get a smooth approximation given a power spectrum and new basis parameters
-get_smooth_from_ps <- function(basis_func, n_basis, audio_object){
-  
-  # Set up new basis
-  my_basis <- basis_func(range(0, (audio_object$Sampling_rate/2)),
-                         nbasis = n_basis)
-  
-  freq <- audio_object$Frequencies
-  power <- audio_object$Power_spectrum
-  
-  # Get parameters of the power spectrum approximation
-  params <- smooth.basis(argvals = freq,
-                         y = power ,
-                         fdParobj = my_basis)$fd$params
-  
-  
-  return(list("Params" = params, "Label" = audio_object$Label))
-}
-
-
-# Apply smooth approximations to a list of audio objects 
-get_smooth_list_from_ps <- function(basis_func, n_basis, list){
-  
-  n_iter <- length(list) # Get number of iterations
-  
-  # Set up a progress bar
-  pb <- txtProgressBar(min = 0,      # Minimum value of the progress bar
-                       max = n_iter, # Maximum value of the progress bar
-                       style = 3,    # Progress bar style [1, 2, 3]
-                       width = 50,   # Progress bar width
-                       char = "=")   # Character used to create the bar
-  
-  i = 1 # Set iterator to update the progress bar
-  
-  smooth_list <- list()
-  
-  for(audio_object in list){
-    smooth_list <- append(smooth_list, list(get_smooth_from_ps(basis_func, 
-                                                     n_basis, 
-                                                     audio_object)))
-    
-    setTxtProgressBar(pb, i) # Update progress bar
-    i = i + 1 
-  }
-  
-  close(pb) 
-  return(smooth_list)
-}
-
-
 # MEL Feature Extraction --------------------------------------------------
 
 
@@ -374,11 +240,12 @@ mel_filter_feature <- function(audio_obj, n = 200){
   
   mel_filter <- mel_filter_bank$amp # Extract mel filter amplitudes 
   mel_freq <- 1000 * mel_filter_bank$central.freq # Extract central frequencies
+  mel_freq_steps <- mel_freq - c(0,mel_freq[1:n-1]) # Get freq steps
   
   # Apply mel filterbank to the power spectrum and normalize
-  mel_ps <- (c(power_spectrum %*% mel_filter)) / colSums(mel_filter)
-  mel_ps <- log(mel_ps / sum(mel_ps * mel_freq) ) 
-  
+  mel_ps <- c(power_spectrum %*% mel_filter) / colSums(mel_filter)
+  mel_ps <- log(mel_ps / sum(mel_ps * mel_freq_steps))
+
   return(list("Mel" = mel_ps, 
               "Label" = audio_obj$Label,
               "Author"= audio_obj$Author))
@@ -490,7 +357,7 @@ kNN_k_folds_cv <- function(features_list, f = 10, K){
   acc <- acc / f
   abs_err <- abs_err / f
   
-  return(list("L2" = L2_err, "Accuracy" = acc, "Mean_abs" = abs_err))
+  return(list("RMSE" = L2_err, "Accuracy" = acc, "Mean_abs" = abs_err))
 }
 
 # KR prediction ----------------------------------------------------------
@@ -580,7 +447,7 @@ k_folds_cv <- function(features_list, k = 10, h = 0.5){
   acc <- acc / k
   abs_err <- abs_err / k
   
-  return(list("L2" = L2_err, "Accuracy" = acc, "Mean_abs" = abs_err))
+  return(list("RMSE" = L2_err, "Accuracy" = acc, "Mean_abs" = abs_err))
 }
 
 # Leave-one-out-cross-validation
@@ -702,51 +569,5 @@ bagging_cv <- function(features_list,
   }
 
   # Montecarlize
-  return(baggable)
-}
-
-# Conformal prediction  ---------------------------------------------------
-
-train_test_conformal_split <- function(dataset, ratio = c(0.8,0.1,0.1)) {
-  
-  n <- length(dataset)
-  idxs <- 1:n
-  train_idx <- sample(idxs, ratio[1]*n)
-  
-  train  <- dataset[train_idx]
-  
-  test_conf_idxs <- idxs[-train_idx]
-  test_idx <- sample(test_conf_idxs, ratio[2]*n)
-  
-  test <- dataset[test_idx]
-  conf <- dataset[-c(train_idx,test_idx)]
-  return(list("Train" = train, "Test"= test, "Conf"=conf))
-}
-
-Mean_abs_diff <- function(v1,v2){return(mean(abs(v1-v2)))}
-
-calibration_quantile <- function(dataset, ratio=c(0.8,0.1,0.1),h,alpha=0.05) {
-  
-  # Splitting the data
-  c(train, test, conf) := train_test_conformal_split(dataset,ratio)
-  
-  # Gathering prediction
-  preds <- KR_predict_set(train,conf,h)
-  scores <- Mean_abs_diff(preds[,1], preds[,2])
-  
-  # Retrieving an empirical quantile of the scores
-  p <- ceiling(length(conf)+1)*(1-alpha)/length(conf)
-  return(quantile(scores,p))
-}
-
-conformal_prediction <- function(dataset, h, quantile) {
-  datamatrix <- matrix(NA, nrow=length(dataset), ncol=3)
-  for (i in 1:length(dataset)) {
-    pred <- KR_predict_audio(dataset[-i],dataset[i], h)
-    score <- Mean_abs_diff(pred[,1], pred[,2])
-    datamatrix[i,1] <- pred[,2] - (score+quantile)
-    datamatrix[i,2] <- pred[,2]
-    datamatrix[i,3] <- pred[,2] + (score+quantile)
-  }
-  return(datamatrix)
+  return(mean(baggable))
 }
