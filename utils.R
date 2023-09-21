@@ -1,11 +1,13 @@
-# Libraries and tools -----------------------------------------------------
+# Libraries and basics -----------------------------------------------------
 
 # Libraries
 library(readr)
 library(tuneR)
 library(fda)
+library(seewave)
 
-# Operator to assign multiple variables in the same line of code
+
+# Operator used to assign multiple variables in the same line of code
 ':=' <- function(lhs, rhs) {
   frame <- parent.frame()
   lhs <- as.list(substitute(lhs))
@@ -24,334 +26,548 @@ library(fda)
   return(invisible(NULL)) 
 }
 
-# Data manipulation and feature extraction --------------------------------
 
-# Define audio object from a .wav file
-get_audio_object <- function(file_audio_path){
+# Chunk x in n equal sized vectors
+chunk_in_n <- function(x, n) split(x, cut(seq_along(x), n, labels = FALSE))
+
+
+# Split dataset into train and test
+train_test_split <- function(dataset, test_ratio = 0.2){
   
-  # actual recording
-  audio <- readWave(file_audio_path)
+  n <- length(dataset)
+  train_ratio <- 1 - test_ratio 
   
-  # sample size
+  train_idx <- sample(c(TRUE, FALSE), n, replace = TRUE, 
+                      prob = c(train_ratio, test_ratio))
+  
+  train  <- dataset[train_idx]
+  test   <- dataset[!train_idx]
+  
+  return(list("Train" = train, "Test"= test))
+}
+
+
+# Data manipulation -----------------------------------------------------
+
+
+# Define a custom audio object given a .wav file path
+get_audio_object <- function(audio_file_path){
+  
+  # Load audio file
+  audio <- readWave(audio_file_path)
+  
+  # Get sample size
   n <- length(audio@left)
-
-  # label
-  num_part <- unlist(strsplit(file_audio_path, "_"))[4]
+  
+  # Get sampling rate
+  sampling_rate <- audio@samp.rate
+  
+  # Get frequencies
+  freq_step <- (sampling_rate / n)
+  frequencies <- c(0:(n-1)) * freq_step
+  frequencies <- frequencies[1:(n %/% 2)] # Halve since it is real valued
+  
+  # Get power spectrum
+  power_spectrum <- Mod(fft(c(audio@left))^2) / n
+  power_spectrum <- power_spectrum[1:(n %/% 2)] # Halve since it is real valued
+  
+  # Get label
+  num_part <- unlist(strsplit(audio_file_path, "_"))[4]
   label <- as.numeric(substring(num_part, 1, nchar(num_part) - 4))
   
-  # author
-  author <- unlist(strsplit(file_audio_path, "_"))[3]
-  
-  # get frequencies and halve it (since it is real valued) (MUST CHECK IF RIGHT)
-  sampling_rate <- audio@samp.rate
-  frequencies <- c(0:(n-1)) * (sampling_rate / n)
-  frequencies <- frequencies[1:(n %/% 2)]
-  
-  # get power spectrum and halve it (since it is real valued)
-  my_ps <- Mod(fft(c(audio@left))^2) / n
-  my_ps <- my_ps[1:(n %/% 2)]
-  
+  # Get author
+  author <- unlist(strsplit(audio_file_path, "_"))[3]
   
   return(list("Author" = author,
               "Recording" = audio@left,
               "Label" = label,
               "Frequencies" = frequencies,
-              "Power_spectrum" = my_ps,
+              "Power_spectrum" = power_spectrum,
               "Sample_size" = n,
               "Sampling_rate" = sampling_rate))
 }
-
-# Get audio objects from a folder
+# Get all audio objects given a folder path
 get_audio_objects <- function(directory_path){
   
-  files <- list.files(path = directory_path)
-  n_iter <- length(files)
+  files <- list.files(path = directory_path) # Get audio file names
+  n_iter <- length(files) # Get number of iterations
   
-  # setup progress bar
+  # Set up a progress bar
   pb <- txtProgressBar(min = 0,      # Minimum value of the progress bar
                        max = n_iter, # Maximum value of the progress bar
-                       style = 3,    # Progress bar style (also available style = 1 and style = 2)
-                       width = 50,   # Progress bar width. Defaults to getOption("width")
+                       style = 3,    # Progress bar style [1, 2, 3]
+                       width = 50,   # Progress bar width
                        char = "=")   # Character used to create the bar
-  i = 1 
   
-  result <- list()
+  i = 1 # Set iterator to update the progress bar
+  
+  audio_objects <- list()
+  
   for(file_path in files){
-    result <- append(result, list(get_audio_object(paste(directory_path,file_path,sep="\\"))))
-    setTxtProgressBar(pb, i)
+    audio_objects <- append(audio_objects, 
+                            list(get_audio_object(paste(directory_path,
+                                                        file_path,
+                                                        sep="\\"))))
+    setTxtProgressBar(pb, i) # Update progress bar
     i = i + 1 
   }
   
   close(pb) 
-  return(result)
+  return(audio_objects)
 }
-
-# Thresholding algorithm, detects peaks and compue moving mean given a signal
-ThresholdingAlgo <- function(y,lag,threshold,influence) {
-  signals <- rep(0,length(y))
-  filteredY <- y[0:lag]
-  avgFilter <- NULL
-  stdFilter <- NULL
-  avgFilter[lag] <- mean(y[0:lag], na.rm=TRUE)
-  stdFilter[lag] <- sd(y[0:lag], na.rm=TRUE)
-  for (i in (lag+1):length(y)){
-    if (abs(y[i]-avgFilter[i-1]) > threshold*stdFilter[i-1]) {
-      if (y[i] > avgFilter[i-1]) {
-        signals[i] <- 1;
-      } else {
-        signals[i] <- -1;
-      }
-      filteredY[i] <- influence*y[i]+(1-influence)*filteredY[i-1]
-    } else {
-      signals[i] <- 0
-      filteredY[i] <- y[i]
-    }
-    avgFilter[i] <- mean(filteredY[(i-lag):i], na.rm=TRUE)
-    stdFilter[i] <- sd(filteredY[(i-lag):i], na.rm=TRUE)
-  }
-  return(list("signals"=signals,"avgFilter"=avgFilter,"stdFilter"=stdFilter))
-}
-
-# Divide into test and train sets
-train_test_split <- function(tot_set,test_ratio){
-  n <- length(tot_set)
-  train_ratio <- 1 - test_ratio 
-  sample <- sample(c(TRUE, FALSE), n, replace = TRUE, prob = c(train_ratio,test_ratio))
-  train  <- tot_set[sample]
-  test   <- tot_set[!sample]
-  return(list("Train" = train, "Test"= test))
-}
-
-# Computes the spectogram of a audio object
-spectro = function(data, nfft=1024, window=256, overlap=128, t0=0, 
-                   plot_spec = T, normalize = T, return_data = F){
-  
-  library(signal)
-  library(oce)
-  
-  # extract signal
-  snd = data$Recording
-  
-  # demean to remove DC offset
-  snd = snd-mean(snd)
-  
-  # determine duration
-  dur = length(snd)/data$Sampling_rate
-  
-  # create spectrogram
-  spec = specgram(x = snd,
-                  n = nfft,
-                  Fs = data$Sampling_rate,
-                  window = window,
-                  overlap = overlap
-  )
-  
-  # discard phase info
-  P = abs(spec$S)
-  
-  # normalize
-  if(normalize){
-    P = P/max(P)  
-  }
-  
-  # convert to dB
-  P = 10*log10(P)
-  
-  # config time axis
-  if(t0==0){
-    t = as.numeric(spec$t)
-  } else {
-    t = as.POSIXct(spec$t, origin = t0)
-  }
-  
-  # rename freq
-  f = spec$f
-  
-  if(plot_spec){
-    
-    # change plot colour defaults
-    par(bg = "black")
-    par(col.lab="white")
-    par(col.axis="white")
-    par(col.main="white")
-    
-    # plot spectrogram
-    imagep(t,f, t(P), col = oce.colorsViridis, drawPalette = T,
-           ylab = 'Frequency [Hz]', axes = F)
-    
-    box(col = 'white')
-    axis(2, labels = T, col = 'white')
-    title(main = data$Label)
-    # add x axis
-    if(t0==0){
-      
-      axis(1, labels = T, col = 'white')
-      
-    }else{
-      
-      axis.POSIXct(seq.POSIXt(t0, t0+dur, 10), side = 1, format = '%H:%M:%S', col = 'white', las = 1)
-      mtext(paste0(format(t0, '%B %d, %Y')), side = 1, adj = 0, line = 2, col = 'white')
-      
-    }
-  }
-  
-  if(return_data){
-    
-    # prep output
-    spec = list(
-      t = t,
-      f = f,
-      p = t(P)
-    )
-    
-    return(spec)  
-  }
-}
-
 
 # Distances ---------------------------------------------------------------
 
-L2 <- function(f1, f2){return(sqrt(sum((f1 - f2)^2)))}
-Kernel <- function(x) {
-  return(0.5*exp(-0.5*x^2))
+
+# Euclidean distance between f1 and f2
+L2 <- function(f1, f2){return(sqrt(sum(((f1 - f2)^2))))}
+
+# Root Mean Squared Error 
+RMSE <- function(preds){
+  f1 <- preds$Label
+  f2 <- preds$Prediction
+  return(sqrt(sum(((f1 - f2)^2))/nrow(preds)))
 }
+
+# Mean absolute difference between two vectors
+Mean_abs_diff <- function(v1,v2){return(mean(abs(v1-v2)))}
+
+
+# Gaussian kernel
+Kernel <- function(x) {return(0.5 * exp(-0.5 * x^2))}
+
+
+# Metrics -----------------------------------------------------------------
+
+
+# Euclidean distance between labels and predictions
+L2_score <- function(preds) {
+  f1 <- preds$Label
+  f2 <- preds$Prediction
+  return(sqrt(sum(((f1 - f2)^2))))
+}
+
+
+
+# Mean absolute difference between labels and predictions
+Mean_abs_diff_score <- function(preds){
+  v1 <- preds$Label
+  v2 <- preds$Prediction
+  
+  return(mean(abs(v1-v2)))
+}
+
+
+# Set up a sensitivity range to evaluate accuracy of each prediction
+Accuracy <- function(preds, degrees = 5){
+  
+  k <- 0
+  n <- dim(preds)[1]
+  
+  if(n == 0) return(NA)
+  
+  for(i in (1:n)){
+    
+    prediction <- preds$Prediction[i]
+    label <- preds$Label[i]
+    
+    if(label < prediction + degrees && label > prediction - degrees) k <- k + 1
+  }
+  return(k / n)
+}
+
 
 # Plots -------------------------------------------------------------------
 
-# Plot recording from audio object
-simple_plot <- function(audio_object){
+
+# Plot audio object in time domain
+plot_audio <- function(audio_object){
   
   time <- (1 : audio_object$Sample_size)
   audio <- audio_object$Recording
   
-  # plot 
-  plot(time,audio,"l",ylab = "Audio",xlab = "Time",main = paste(audio_object$Label, "°", sep = ""))
-}
-
-# Plot power spectrum from audio object 
-power_plot <- function(audio_object){
-  plot(audio_object$Frequencies,
-       audio_object$Power_spectrum,
-       "l",ylab = "Power",xlab = "Frequency",
+  plot(time,
+       audio,
+       type = "l",
+       ylab = "Amplitude", 
+       xlab = "Time",
        main = paste(audio_object$Label, "°", sep = ""))
 }
 
-# Plot histogram of labels given a list of recordings objects
-labels_hist <- function(recordings){
+
+# Plot audio object's power spectrum
+plot_power_spectrum <- function(audio_object){
+  
+  plot(audio_object$Frequencies,
+       audio_object$Power_spectrum,
+       type = "l",
+       ylab = "Power",
+       xlab = "Frequency",
+       main = paste(audio_object$Label, "°", sep = ""))
+}
+
+
+# Plot labels' distribution given a set of recordings and k number of bins
+plot_labels <- function(recordings, k){
+  
   labels <- list()
+  
   for(recording in recordings){
-    labels <- append(labels,recording$Label)
+    labels <- append(labels, recording$Label)
   }
+  
   labels <- unlist(labels)
-  hist(labels)
-  
+  hist(labels, breaks = k, probability = F, 
+       ylab = "Abs Frequency",
+       xlab = "Label",
+       main = "Recordings distribution")
 }
 
 
-# Functional features extraction and prediction ---------------------------
+# MEL Feature Extraction --------------------------------------------------
 
-# Get the smooth approximation of a the power spectrum of an audio object defined a basis
-get_smooth_from_ps <- function(basis_func, n_basis, audio_object){
+
+# Compute MFCCs of an audio's power spectrum using mel-filterbank analysis
+mel_filter_feature <- function(audio_obj, n = 200){
   
-  my_basis <- basis_func(range(0,(audio_object$Sampling_rate/2)),nbasis = n_basis)
-  freq <- audio_object$Frequencies
-  power <- audio_object$Power_spectrum
-  appr <- smooth.basis(argvals = freq, y = power ,fdParobj = my_basis)$fd
-  appr <- eval.fd(0:(audio_object$Sampling_rate/2),appr)
-  appr <- appr / sum(appr)
+  # Retrieve the power spectrum
+  power_spectrum <- audio_obj$Power_spectrum
   
-  return(list("PS_smooth_func" = appr,
-              "Label" = audio_object$Label))
+  # Calculate the mel filterbank
+  mel_filter_bank <- melfilterbank(f = audio_obj$Sampling_rate,
+                                   wl = 2 * length(power_spectrum),
+                                   m = n)
+  
+  mel_filter <- mel_filter_bank$amp # Extract mel filter amplitudes 
+  mel_freq <- 1000 * mel_filter_bank$central.freq # Extract central frequencies
+  mel_freq_steps <- mel_freq - c(0,mel_freq[1:n-1]) # Get freq steps
+  
+  # Apply mel filterbank to the power spectrum and normalize
+  mel_ps <- c(power_spectrum %*% mel_filter) / colSums(mel_filter)
+  mel_ps <- log(mel_ps / sum(mel_ps * mel_freq_steps))
+
+  return(list("Mel" = mel_ps, 
+              "Label" = audio_obj$Label,
+              "Author"= audio_obj$Author))
 }
 
-# Get smooth approximations from a list of audio objects 
-get_smooth_list_from_ps <- function(basis_func, n_basis, list){
+
+# Apply mel_filter_feature to a list of audio objects
+mel_filter_features <- function(audio_obj_list, n = 200){
   
-  n_iter <- length(list)
+  n_iter <- length(audio_obj_list) # Get number of iterations
   
-  # setup progress bar
+  # Set up a progress bar
   pb <- txtProgressBar(min = 0,      # Minimum value of the progress bar
                        max = n_iter, # Maximum value of the progress bar
-                       style = 3,    # Progress bar style (also available style = 1 and style = 2)
-                       width = 50,   # Progress bar width. Defaults to getOption("width")
+                       style = 3,    # Progress bar style [1, 2, 3]
+                       width = 50,   # Progress bar width
                        char = "=")   # Character used to create the bar
-  i = 1 
   
-  result <- list()
-  for(audio_object in list){
-    result <- append(result, list(get_smooth_from_ps(basis_func, n_basis, audio_object)))
-    setTxtProgressBar(pb, i)
+  i = 1 # Set iterator to update the progress bar
+  
+  mel_features <- list()
+  
+  for(audio_object in audio_obj_list){
+    mel_features <- append(mel_features,
+                           list(mel_filter_feature(audio_object, n)))
+    
+    setTxtProgressBar(pb, i) # Update progress bar
     i = i + 1 
   }
+  
   close(pb) 
-  return(result)
+  return(mel_features)
 }
 
 
-# KNN prediction ----------------------------------------------------------
+# kNN regression ----------------------------------------------------------
 
-# Predict a single audio 
-KNN_predict_audio <- function(train_set, new_data, k){
+kNN_predict_audio <- function(train_set, new_data, K) {
   
-  weight_label_dataframe <- data.frame()
+  # Initialize data structure to store distances and labels
+  distances_matrix <- matrix(NA,nrow=length(train_set),ncol=2)
   
-  for(train_audio in train_set){
-    weight <-  Kernel( L2(train_audio$PS_smooth_func,new_data$PS_smooth_func) ) 
-    weight_label_dataframe <- rbind(weight_label_dataframe,c(weight,train_audio$Label))
+  # Main loop for pair-wise distances
+  for (i in 1:length(train_set)) {
+    audio <- train_set[[i]]
+    distances_matrix[i,1] <- L2(audio$Mel, new_data$Mel)
+    distances_matrix[i,2] <- audio$Label
   }
   
-  names(weight_label_dataframe) <- c("Weight","Label")
-  weight_label_dataframe <- weight_label_dataframe[order(weight_label_dataframe$Weight,decreasing = T),]
+  # Sort by increasing distance and retrieve the kNN
+  idxs <- order(distances_matrix[,1])[1:K]
   
-  weight_label_dataframe <- weight_label_dataframe[1:k,]
+  # Retrieve the mean of the labels of the kNN
+  return(mean(distances_matrix[idxs,2]))
+}
+
+kNN_predict_set <- function(train_set, test_set, K) {
   
-  tot_weight <- sum(weight_label_dataframe$Weight)
+  # Set up a dataframe to store predictions
+  preds <- data.frame()
   
-  prediction <- sum(weight_label_dataframe$Weight * weight_label_dataframe$Label) / tot_weight
+  # Predict for each element in the test_set
+  for(audio in test_set){
+    preds <- rbind(preds, 
+                   c(audio$Label, kNN_predict_audio(train_set, audio, K)))
+  }
+  
+  names(preds) <- c("Label", "Prediction") # Add column names
+  preds <- preds[order(preds$Label), ] # Sort by Label
+  
+  return(preds)
+}
+
+kNN_loo_cv <- function(features_list, K) {
+  
+  n <- length(features_list)  # Get size
+  
+  #LOOCV is k-fold with k = n
+  return(kNN_k_folds_cv(features_list, f = n, K))
+}
+
+# K-folds cross validation
+kNN_k_folds_cv <- function(features_list, f = 10, K){
+  
+  n <- length(features_list)  # Get size
+  folds <- chunk_in_n(1:n, f) # Split data in folds
+  
+  # Initialize metrics
+  L2_err <- 0
+  acc <- 0
+  abs_err <- 0
+  
+  for(fold in folds){
+    
+    test <- features_list[fold] # Get test features
+    train <- features_list[-fold] # Get train features
+    
+    # Evaluate predictions
+    preds <- kNN_predict_set(train, test, K)
+    
+    # Increment metrics
+    L2_err <- L2_err + L2(preds$Label, preds$Prediction)
+    acc <- acc + Accuracy(preds)
+    abs_err <- abs_err + Mean_abs_diff(preds$Label, preds$Prediction)
+  }
+  
+  # Compute final metrics
+  L2_err <- L2_err / f
+  acc <- acc / f
+  abs_err <- abs_err / f
+  
+  return(list("RMSE" = L2_err, "Accuracy" = acc, "Mean_abs" = abs_err))
+}
+
+# KR prediction ----------------------------------------------------------
+
+
+# Single prediction
+KR_predict_audio <- function(train_set, new_data, h){
+  
+  # Set up a dataframe to save distances
+  weights_df <- data.frame()
+  
+  # Calculate L2 distance between new_data and each element in train
+  for(train_audio in train_set){
+    weight <-  Kernel(L2(train_audio$Mel, new_data$Mel)/h) 
+    weights_df <- rbind(weights_df, c(weight, train_audio$Label))
+  }
+  
+  names(weights_df) <- c("Weight", "Label")
+  
+  # Evaluate prediction
+  tot_weight <- sum(weights_df$Weight)
+  prediction <- sum(weights_df$Weight * weights_df$Label) / tot_weight
+  
+  if(is.na(prediction)) prediction <- 0
   
   return(prediction)
 }
 
-# Predict a set of audios
-KNN_predict_set <- function(train_set,test_set,k){
+# Multiple prediction
+KR_predict_set <- function(train_set, test_set, h){
+  
+  # Set up a dataframe to store predictions
   preds <- data.frame()
+  
+  # Predict for each element in the test_set
   for(audio in test_set){
-    preds <- rbind(preds,
-                   c(audio$Label,KNN_predict_audio(train_set, audio, k)))
-  }
-  names(preds) <- c("Label", "Prediction")
-  preds <- preds[order(preds$Label),]
-}
-
-# All NN prediction  ------------------------------------------------------
-
-# Predict a single audio 
-All_NN_predict_audio <- function(train_set, new_data){
-  
-  weight_label_dataframe <- data.frame()
-  
-  for(train_audio in train_set){
-    weight <-  Kernel( L2(train_audio$PS_smooth_func,new_data$PS_smooth_func) )
-    weight_label_dataframe <- rbind(weight_label_dataframe,c(weight,train_audio$Label))
+    preds <- rbind(preds, 
+                   c(audio$Label, KR_predict_audio(train_set, audio, h)))
   }
   
-  names(weight_label_dataframe) <- c("Weight","Label")
-
-  tot_weight <- sum(weight_label_dataframe$Weight)
+  names(preds) <- c("Label", "Prediction") # Add column names
+  preds <- preds[order(preds$Label), ] # Sort by Label
   
-  prediction <- sum(weight_label_dataframe$Weight * weight_label_dataframe$Label) / tot_weight
-  
-  return(prediction)
+  return(preds)
 }
 
-# Predict a set of audios
-All_NN_predict_set <- function(train_set,test_set){
-  preds <- data.frame()
-  for(audio in test_set){
-    preds <- rbind(preds,
-                   c(audio$Label,All_NN_predict_audio(train_set, audio)))
+
+# CV ----------------------------------------------------------------------
+
+# Leave-one-out-cross-validation
+
+loo_cv <- function(features_list, h = 0.5, k) {
+  
+  n <- length(features_list)  # Get size
+  
+  #LOOCV is k-fold with k = n
+  return(k_folds_cv(features_list, k = n, h = 0.5))
+}
+
+# K-folds cross validation
+k_folds_cv <- function(features_list, k = 10, h = 0.5){
+  
+  n <- length(features_list)  # Get size
+  folds <- chunk_in_n(1:n, k) # Split data in folds
+  
+  # Initialize metrics
+  L2_err <- 0
+  acc <- 0
+  abs_err <- 0
+  
+  for(fold in folds){
+    
+    test <- features_list[fold] # Get test features
+    train <- features_list[-fold] # Get train features
+    
+    # Evaluate predictions
+    preds <- KR_predict_set(train, test, h)
+    
+    # Increment metrics
+    L2_err <- L2_err + L2(preds$Label, preds$Prediction)
+    acc <- acc + Accuracy(preds)
+    abs_err <- abs_err + Mean_abs_diff(preds$Label, preds$Prediction)
   }
-  names(preds) <- c("Label", "Prediction")
-  preds <- preds[order(preds$Label),]
+  
+  # Compute final metrics
+  L2_err <- L2_err / k 
+  acc <- acc / k
+  abs_err <- abs_err / k
+  
+  return(list("RMSE" = L2_err, "Accuracy" = acc, "Mean_abs" = abs_err))
 }
 
+# Leave-one-out-cross-validation
+loo_cv <- function(features_list, h = 0.5) {
+  
+  n <- length(features_list)  # Get sample size
+  
+  # LOOCV is k-fold with k = n
+  return(k_folds_cv(features_list, h, k = n))
+}
+
+# Evaluate a metric function over a set of ranges
+evaluate_ranges <- function(preds, metric_fun, degrees = 5) {
+  
+  preds <- preds[order(preds$Label), ] # Sort by label
+  
+  # Calculate lower bound for each degree range
+  lower_bounds <- seq(0, 100, by = degrees)
+  lower_bounds <- lower_bounds[1 : (length(lower_bounds)-1)]
+  
+  report_df <- data.frame() # Set up a dataframe to store results
+  
+  for(lower_bound in lower_bounds) {
+    
+    upper_bound = lower_bound  + degrees
+    
+    # Get current range predictions subset
+    preds_subset <- preds[preds$Label > lower_bound,]
+    preds_subset <- preds_subset[preds_subset$Label < upper_bound,]
+    
+    # Write lower-upper bound interval
+    interval <- paste(as.character(lower_bound),
+                      as.character(upper_bound),
+                      sep = "-")
+    
+    # Add row to report
+    row <- data.frame(interval = interval, 
+                      score = round(metric_fun(preds_subset),3))
+    
+    report_df <- rbind(report_df, row)
+  }
+  
+  return(report_df)
+}
+
+
+# Apply k-fold cross validation and custom metric function to ranges of y
+cv_ranges_scores <- function(features_list,
+                            metric_fun = Accuracy,
+                            k = 10,
+                            h = 0.5,
+                            degrees = 20){
+  
+  n <- length(features_list) # Get size
+  folds <- chunk_in_n(1:n, k) # Split data in folds
+  
+  n_int <- floor(100 / degrees) # Get number of intervals
+  int_scores <- rep(0, n_int)  # Set up a list of scores
+  
+  for(fold in folds){
+    
+    test <- features_list[fold] # Get train features
+    train <- features_list[-fold] # Get test features
+    
+    # Evaluate predictions
+    preds <- KR_predict_set(train, test, h)
+    
+    # Apply metric function to 
+    int_scores <- int_scores + evaluate_ranges(preds, metric_fun, degrees)$score
+  }
+  
+  # Set up a report based on last fold
+  report <-  evaluate_ranges(preds, metric_fun, degrees)
+  
+  int_scores <- int_scores / k # Adjust scores
+  report$score <- int_scores   # Update report
+  
+  return(report)
+}
+
+
+bagging_cv <- function(features_list, 
+                       grid_vals = seq(0, 10, length.out = 50)[-1],
+                       N = 20) {
+  
+  # Optimal sub-sampling size 
+  n <- length(features_list)  # Get the sample size
+  r <- 20                     # Naive suboptimal subsampling size
+  
+  # Initialize a vector to store the sub-optimal values
+  baggable <- rep(NA, N)
+  
+  pb <- txtProgressBar(min = 0,      # Minimum value of the progress bar
+                       max = N,      # Maximum value of the progress bar
+                       style = 3,    # Progress bar style [1, 2, 3]
+                       width = 50,   # Progress bar width
+                       char = "=")   # Character used to create the bar
+  # Main loop 
+  for (i in 1:N) {
+    
+    # Random sub-sampling
+    idxs <- sample(1:n, r)
+    
+    # Initialize a vector to store grid-search scores
+    scores <- rep(NA, length(grid_vals))
+
+    # Inner LOOCV loop
+    for (j in 1:length(grid_vals)) {
+      
+      LOOCV <- loo_cv(features_list[idxs], h=grid_vals[j])
+      scores[j] <- LOOCV$L2
+    }
+    
+    # Store the best bandwidth
+    baggable[i] <- grid_vals[which.min(scores)]
+    
+    
+    setTxtProgressBar(pb, i) # Update progress bar
+  }
+
+  # Montecarlize
+  return(mean(baggable))
+}
